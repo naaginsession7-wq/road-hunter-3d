@@ -1,0 +1,7 @@
+
+{
+  "appId": "com.roadhunter.game",
+  "appName": "ROAD HUNTER 3D",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
