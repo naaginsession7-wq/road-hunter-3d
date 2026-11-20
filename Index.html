@@ -1,0 +1,526 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ROAD HUNTER 3D</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#65b5ed;font-family:Arial;touch-action:none}
+canvas{display:block}
+#hud{position:fixed;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;z-index:3;pointer-events:none}
+.panel{background:#10202ddd;color:white;padding:12px;border-radius:12px;border:1px solid #ffffff66;font-weight:bold}
+#controls{position:fixed;bottom:20px;left:0;width:100%;padding:0 18px;display:flex;justify-content:space-between;z-index:4;pointer-events:none}
+.group{display:flex;gap:12px;pointer-events:auto}
+button{width:68px;height:68px;border-radius:50%;border:2px solid white;background:#101d30dd;color:white;font-size:26px;font-weight:bold;touch-action:none}
+button:active{background:#008fff}
+#gas{background:#087c3c}
+#brake{background:#a52222}
+#camera{position:fixed;right:18px;top:105px;width:53px;height:48px;border-radius:12px;font-size:21px;z-index:4}
+#toast{position:fixed;top:42%;left:50%;transform:translate(-50%,-50%);background:#151c25ed;color:#ffd700;padding:16px 25px;border-radius:12px;font-weight:bold;display:none;z-index:5}
+#start{position:fixed;inset:0;background:linear-gradient(#092f52cc,#061727f5);display:flex;justify-content:center;align-items:center;flex-direction:column;gap:17px;color:white;text-align:center;z-index:10}
+#start h1{font-size:34px;color:#00d9ff;text-shadow:0 0 15px #009dff}
+#start button{width:auto;height:auto;padding:15px 35px;border-radius:12px;background:#008ee9;font-size:20px}
+#start p{font-size:14px}
+</style>
+</head>
+<body>
+
+<div id="hud">
+ <div class="panel">🏎 ROAD HUNTER 3D<br><span id="speed">0 KM/H</span></div>
+ <div class="panel">🪙 COINS: <span id="coins">0</span></div>
+</div>
+
+<button id="camera">📷</button>
+<div id="toast">+10 COINS 🪙</div>
+
+<div id="controls">
+ <div class="group">
+  <button id="left">◀</button>
+  <button id="right">▶</button>
+ </div>
+ <div class="group">
+  <button id="brake">▼</button>
+  <button id="gas">▲</button>
+ </div>
+</div>
+
+<div id="start">
+ <h1>ROAD HUNTER 3D</h1>
+ <h3>BMW ENDLESS DRIVE</h3>
+ <p>BLUE SKY • REAL ROAD • COIN COLLECTION</p>
+ <p>Drive your BMW and explore the world!</p>
+ <button id="play">START GAME</button>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// SCENE
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x64b5ed);
+scene.fog=new THREE.Fog(0x9bcdf0,130,320);
+
+const camera=new THREE.PerspectiveCamera(
+70,innerWidth/innerHeight,.1,700
+);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.shadowMap.enabled=true;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.25;
+document.body.appendChild(renderer.domElement);
+
+// LIGHTING
+scene.add(new THREE.HemisphereLight(0xd8efff,0x61704c,2.2));
+
+const sun=new THREE.DirectionalLight(0xfff4df,2.6);
+sun.position.set(-40,75,30);
+sun.castShadow=true;
+scene.add(sun);
+
+// MATERIALS
+function mat(color,roughness=.8,metalness=0){
+return new THREE.MeshStandardMaterial({
+color,roughness,metalness
+});
+}
+
+const grassMat=mat(0x4b9143);
+const roadMat=mat(0x34373a,.95);
+const whiteMat=mat(0xffffff);
+const treeMat=mat(0x276e32);
+const trunkMat=mat(0x704526);
+const houseMat=mat(0xe0c9a9);
+const roofMat=mat(0x963e2d);
+const glassMat=mat(0x17374e,.15,.5);
+const blackMat=mat(0x101114,.8,.1);
+const chromeMat=mat(0xc8d1d9,.22,.9);
+const blueMat=mat(0x075bd1,.23,.7);
+const goldMat=new THREE.MeshStandardMaterial({
+color:0xffd01c,metalness:.85,roughness:.2,
+emissive:0x493000
+});
+
+// BOX
+function box(parent,w,h,d,material,x,y,z){
+const mesh=new THREE.Mesh(
+new THREE.BoxGeometry(w,h,d),material
+);
+mesh.position.set(x,y,z);
+mesh.castShadow=true;
+mesh.receiveShadow=true;
+parent.add(mesh);
+return mesh;
+}
+
+// CLOUDS
+function makeCloud(x,y,z,scale=1){
+const cloud=new THREE.Group();
+cloud.position.set(x,y,z);
+cloud.scale.setScalar(scale);
+scene.add(cloud);
+
+const cloudMat=new THREE.MeshStandardMaterial({
+color:0xffffff,roughness:1
+});
+
+const parts=[
+[-1,0,0,1.6],
+[0,.45,0,2],
+[1.4,0,0,1.5],
+[.3,-.1,.7,1.5]
+];
+
+for(const [px,py,pz,r] of parts){
+const p=new THREE.Mesh(
+new THREE.SphereGeometry(r,12,10),
+cloudMat
+);
+p.position.set(px,py,pz);
+cloud.add(p);
+}
+}
+
+for(let i=0;i<24;i++){
+makeCloud(
+(Math.random()-.5)*270,
+32+Math.random()*22,
+-350+Math.random()*500,
+1+Math.random()*1.5
+);
+}
+
+// SUN
+const sunMesh=new THREE.Mesh(
+new THREE.SphereGeometry(7,20,20),
+new THREE.MeshBasicMaterial({color:0xfff2b5})
+);
+sunMesh.position.set(-90,75,-180);
+scene.add(sunMesh);
+
+// BMW-INSPIRED CAR
+const car=new THREE.Group();
+scene.add(car);
+
+// Main body
+box(car,2.25,.55,4.65,blueMat,0,.88,0);
+
+// Bonnet
+box(car,2.12,.22,1.35,blueMat,0,1.17,-1.55);
+
+// Cabin
+box(car,1.85,.85,2.45,glassMat,0,1.52,-.15);
+
+// Roof
+box(car,1.72,.12,1.4,blueMat,0,1.98,-.12);
+
+// Front bumper
+box(car,2.15,.3,.2,blueMat,0,.58,-2.34);
+
+// Rear bumper
+box(car,2.15,.3,.2,blueMat,0,.58,2.34);
+
+// Front kidney-style grille
+for(const x of [-.27,.27]){
+const grille=new THREE.Mesh(
+new THREE.BoxGeometry(.4,.55,.08),
+blackMat
+);
+grille.position.set(x,.86,-2.35);
+car.add(grille);
+
+for(let y=0;y<4;y++){
+box(car,.32,.025,.025,chromeMat,x,.66+y*.12,-2.4);
+}
+}
+
+// Headlights
+for(const x of [-.78,.78]){
+box(car,.5,.2,.1,chromeMat,x,1.04,-2.34);
+box(car,.37,.1,.035,whiteMat,x,1.05,-2.4);
+}
+
+// Side windows
+for(const x of [-.94,.94]){
+box(car,.05,.6,1.6,glassMat,x,1.56,-.18);
+}
+
+// Mirrors
+for(const x of [-1.2,1.2]){
+box(car,.25,.15,.35,blueMat,x,1.42,-.9);
+}
+
+// Rear lights
+for(const x of [-.75,.75]){
+box(car,.48,.22,.1,mat(0xd40015),x,.96,2.35);
+}
+
+// BMW-inspired badge
+const badge=new THREE.Mesh(
+new THREE.CircleGeometry(.17,24),
+chromeMat
+);
+badge.position.set(0,1.25,-2.43);
+car.add(badge);
+
+// Wheels
+const wheels=[];
+for(const x of [-1.13,1.13]){
+for(const z of [-1.5,1.5]){
+const wheel=new THREE.Group();
+wheel.position.set(x,.52,z);
+car.add(wheel);
+
+const tyre=new THREE.Mesh(
+new THREE.CylinderGeometry(.44,.44,.3,28),
+blackMat
+);
+tyre.rotation.z=Math.PI/2;
+wheel.add(tyre);
+
+const rim=new THREE.Mesh(
+new THREE.CylinderGeometry(.24,.24,.32,20),
+chromeMat
+);
+rim.rotation.z=Math.PI/2;
+wheel.add(rim);
+
+wheels.push(wheel);
+}
+}
+
+// TREES
+function makeTree(parent,x,z,scale=1){
+const tree=new THREE.Group();
+tree.position.set(x,0,z);
+tree.scale.setScalar(scale);
+parent.add(tree);
+
+box(tree,.6,3,.6,trunkMat,0,1.5,0);
+
+const leaves=new THREE.Mesh(
+new THREE.SphereGeometry(1.9,14,12),
+treeMat
+);
+leaves.position.y=3.7;
+leaves.castShadow=true;
+tree.add(leaves);
+}
+
+// HOUSES
+function makeHouse(parent,x,z){
+const house=new THREE.Group();
+house.position.set(x,0,z);
+parent.add(house);
+
+box(house,7,5,7,houseMat,0,2.5,0);
+
+const roof=new THREE.Mesh(
+new THREE.ConeGeometry(5.5,3.5,4),
+roofMat
+);
+roof.rotation.y=Math.PI/4;
+roof.position.y=6.4;
+house.add(roof);
+
+box(house,1.25,2.5,.15,roofMat,0,1.25,-3.58);
+
+for(const wx of [-2,2]){
+box(house,1.3,1.4,.13,glassMat,wx,3,-3.62);
+}
+}
+
+// COINS
+const coinGeo=new THREE.TorusGeometry(.65,.18,12,24);
+function makeCoin(parent,x,z){
+const coin=new THREE.Mesh(coinGeo,goldMat);
+coin.position.set(x,1.5,z);
+coin.castShadow=true;
+parent.add(coin);
+return coin;
+}
+
+// ENDLESS WORLD
+const chunkLength=40;
+const chunkCount=18;
+const chunks=[];
+const allCoins=[];
+
+function createChunk(i){
+const chunk=new THREE.Group();
+chunk.position.z=-i*chunkLength;
+scene.add(chunk);
+
+// Grass
+box(chunk,150,.5,chunkLength,grassMat,0,-.75,0);
+
+// Road
+box(chunk,17,.2,chunkLength,roadMat,0,-.35,0);
+
+// Road edges
+box(chunk,.17,.04,chunkLength,whiteMat,-8,-.22,0);
+box(chunk,.17,.04,chunkLength,whiteMat,8,-.22,0);
+
+// Center road markings
+for(let z=-18;z<20;z+=10){
+box(chunk,.18,.04,4,whiteMat,0,-.22,z);
+}
+
+// Side trees and houses
+for(const side of [-1,1]){
+makeTree(chunk,side*11,-12,.95);
+makeTree(chunk,side*12,9,1.1);
+makeTree(chunk,side*14,18,.8);
+
+if(Math.random()>.2){
+makeHouse(chunk,side*23,-7);
+}
+}
+
+// Coins
+const list=[];
+const lane=[-3.8,0,3.8];
+const selected=lane[Math.floor(Math.random()*3)];
+
+for(let j=0;j<5;j++){
+list.push(makeCoin(chunk,selected,-16+j*5));
+}
+
+chunks.push({group:chunk,coins:list});
+allCoins.push(...list);
+}
+
+for(let i=0;i<chunkCount;i++)createChunk(i);
+
+// GAME CONTROLS
+let left=false,right=false,gas=false,brake=false;
+let speed=0,steering=0,lateralVelocity=0;
+let coins=0,playing=false,cameraMode=0;
+
+function hold(id,callback){
+const b=document.getElementById(id);
+b.addEventListener('pointerdown',e=>{
+e.preventDefault();
+b.setPointerCapture(e.pointerId);
+callback(true);
+});
+const stop=e=>{
+e.preventDefault();
+callback(false);
+};
+b.addEventListener('pointerup',stop);
+b.addEventListener('pointercancel',stop);
+b.addEventListener('lostpointercapture',()=>callback(false));
+}
+
+hold('left',v=>left=v);
+hold('right',v=>right=v);
+hold('gas',v=>gas=v);
+hold('brake',v=>brake=v);
+
+document.getElementById('camera').onclick=()=>{
+cameraMode=(cameraMode+1)%2;
+};
+
+document.getElementById('play').onclick=()=>{
+playing=true;
+document.getElementById('start').style.display='none';
+};
+
+// COIN POPUP
+let toastTimer;
+function coinMessage(){
+const el=document.getElementById('toast');
+el.style.display='block';
+clearTimeout(toastTimer);
+toastTimer=setTimeout(()=>el.style.display='none',700);
+}
+
+// DRIVING PHYSICS
+const clock=new THREE.Clock();
+const camTarget=new THREE.Vector3();
+const lookTarget=new THREE.Vector3();
+
+function animate(){
+requestAnimationFrame(animate);
+const dt=Math.min(clock.getDelta(),.04);
+
+if(playing){
+
+// Smooth acceleration
+if(gas)speed+=30*dt;
+else speed-=5*dt;
+
+if(brake)speed-=55*dt;
+speed=THREE.MathUtils.clamp(speed,0,85);
+
+// Steering
+let target=0;
+if(left)target=-1;
+if(right)target=1;
+
+steering=THREE.MathUtils.damp(
+steering,target,5,dt
+);
+
+lateralVelocity=THREE.MathUtils.damp(
+lateralVelocity,
+steering*14*(speed/85),
+4,dt
+);
+
+car.position.x+=lateralVelocity*dt;
+car.position.x=THREE.MathUtils.clamp(
+car.position.x,-6,6
+);
+
+// Car tilt
+car.rotation.z=THREE.MathUtils.damp(
+car.rotation.z,-steering*.12,5,dt
+);
+
+// Car running
+car.position.z-=speed*dt*.65;
+
+// Wheel rotation
+wheels.forEach(w=>{
+w.rotation.x-=speed*dt*.08;
+});
+
+// Endless road
+for(const chunk of chunks){
+if(chunk.group.position.z>car.position.z+45){
+chunk.group.position.z-=chunkCount*chunkLength;
+chunk.coins.forEach(c=>c.visible=true);
+}
+}
+
+// Coin collection
+for(const coin of allCoins){
+if(!coin.visible)continue;
+
+coin.rotation.y+=dt*3;
+
+const worldZ=coin.parent.position.z+coin.position.z;
+
+if(
+Math.abs(car.position.z-worldZ)<2.5 &&
+Math.abs(car.position.x-coin.position.x)<2
+){
+coin.visible=false;
+coins+=10;
+document.getElementById('coins').textContent=coins;
+coinMessage();
+}
+}
+
+document.getElementById('speed').textContent=
+Math.round(speed*2)+' KM/H';
+}
+
+// Camera views
+if(cameraMode===0){
+camTarget.set(
+car.position.x,
+car.position.y+5.5,
+car.position.z+10
+);
+}else{
+camTarget.set(
+car.position.x,
+car.position.y+2.1,
+car.position.z-.4
+);
+}
+
+camera.position.lerp(
+camTarget,1-Math.pow(.001,dt)
+);
+
+lookTarget.set(
+car.position.x,1.2,car.position.z-9
+);
+camera.lookAt(lookTarget);
+
+renderer.render(scene,camera);
+}
+
+animate();
+
+// RESIZE
+window.addEventListener('resize',()=>{
+camera.aspect=innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
