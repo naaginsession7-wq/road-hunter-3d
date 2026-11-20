@@ -1,0 +1,54 @@
+
+name: Build ROAD HUNTER 3D AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get Game Files
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npm install @capacitor/android@7.4.3
+
+      - name: Prepare Game
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+
+      - name: Create Android Project
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Build AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROAD-HUNTER-3D-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
